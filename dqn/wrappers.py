@@ -31,12 +31,13 @@ class NoopResetEnv(gym.Wrapper):
             noops = self.unwrapped.np_random.integers(1, self.noop_max + 1)  # pylint: disable=E1101
         assert noops > 0
         obs = None
+        info = None
         for _ in range(noops):
             obs, reward, done, truncated, info = self.env.step(self.noop_action)
             done = done or truncated
             if done:
                 obs, info = self.env.reset(**kwargs)
-        return obs,info
+        return obs, info
 
     def step(self, ac):
         return self.env.step(ac)
@@ -51,15 +52,15 @@ class FireResetEnv(gym.Wrapper):
 
     def reset(self, **kwargs):
         self.env.reset(**kwargs)
-        obs, _, done, truncated, _ = self.env.step(1)
+        obs, reward, done, truncated, info = self.env.step(1)
         done = done or truncated
         if done:
             self.env.reset(**kwargs)
-        obs, _, done, truncated, _ = self.env.step(2)
+        obs, reward, done, truncated, info = self.env.step(2)
         done = done or truncated
         if done:
             self.env.reset(**kwargs)
-        return obs
+        return obs, info
 
     def step(self, ac):
         return self.env.step(ac)
@@ -76,7 +77,6 @@ class EpisodicLifeEnv(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, truncated, info = self.env.step(action)
-        done = done or truncated
         self.was_real_done = done
         # check current lives, make loss of life terminal,
         # then update lives to handle bonus lives
@@ -88,7 +88,7 @@ class EpisodicLifeEnv(gym.Wrapper):
             # the environment advertises done.
             done = True
         self.lives = lives
-        return obs, reward, done, info
+        return obs, reward, done, truncated, info
 
     def reset(self, **kwargs):
         """Reset only when lives are exhausted.
@@ -99,9 +99,9 @@ class EpisodicLifeEnv(gym.Wrapper):
             obs, info = self.env.reset(**kwargs)
         else:
             # no-op step to advance from terminal/lost life state
-            obs, _, _, _, _ = self.env.step(0)
+            obs, reward, done, truncated, info = self.env.step(0)
         self.lives = self.env.unwrapped.ale.lives()
-        return obs
+        return obs, info
 
 
 class MaxAndSkipEnv(gym.Wrapper):
@@ -112,16 +112,17 @@ class MaxAndSkipEnv(gym.Wrapper):
         self._obs_buffer = np.zeros((2,) + env.observation_space.shape, dtype=np.uint8)
         self._skip = skip
 
-    def reset(self):
-        return self.env.reset()
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)
 
     def step(self, action):
         """Repeat action, sum reward, and max over last observations."""
         total_reward = 0.0
         done = None
+        truncated = None
+        info = None
         for i in range(self._skip):
             obs, reward, done, truncated, info = self.env.step(action)
-            done = done or truncated
             if i == self._skip - 2: self._obs_buffer[0] = obs
             if i == self._skip - 1: self._obs_buffer[1] = obs
             total_reward += reward
@@ -130,11 +131,7 @@ class MaxAndSkipEnv(gym.Wrapper):
         # Note that the observation on the done=True frame
         # doesn't matter
         max_frame = self._obs_buffer.max(axis=0)
-
-        return max_frame, total_reward, done, info
-
-    def reset(self, **kwargs):
-        return self.env.reset(**kwargs)
+        return max_frame, total_reward, done, truncated, info
 
 
 class ClipRewardEnv(gym.RewardWrapper):
@@ -175,8 +172,8 @@ class FrameStack(gym.Wrapper):
         shp = env.observation_space.shape
         self.observation_space = spaces.Box(low=0, high=255, shape=(shp[0] * k, shp[1], shp[2]), dtype=np.uint8)
 
-    def reset(self):
-        ob, info = self.env.reset()
+    def reset(self, **kwargs):
+        ob, info = self.env.reset(**kwargs)
         for _ in range(self.k):
             self.frames.append(ob)
         return self._get_ob()
@@ -185,7 +182,7 @@ class FrameStack(gym.Wrapper):
         ob, reward, done, truncated, info = self.env.step(action)
         done = done or truncated
         self.frames.append(ob)
-        return self._get_ob(), reward, done, info
+        return self._get_ob(), reward, done, truncated, info
 
     def _get_ob(self):
         assert len(self.frames) == self.k

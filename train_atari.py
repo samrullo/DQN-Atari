@@ -12,15 +12,15 @@ import argparse
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='DQN Atari')
-    parser.add_argument('--load-checkpoint-file', type=str, default=None, 
+    parser.add_argument('--load-checkpoint-file', type=str, default=None,
                         help='Where checkpoint file should be loaded from (usually results/checkpoint.pth)')
 
     args = parser.parse_args()
     # If you have a checkpoint file, spend less time exploring
-    if(args.load_checkpoint_file):
-        eps_start= 0.01
+    if (args.load_checkpoint_file):
+        eps_start = 0.01
     else:
-        eps_start= 1
+        eps_start = 1
 
     hyper_params = {
         "seed": 42,  # which seed to use
@@ -28,7 +28,7 @@ if __name__ == '__main__':
         "replay-buffer-size": int(5e3),  # replay buffer size
         "learning-rate": 1e-4,  # learning rate for Adam optimizer
         "discount-factor": 0.99,  # discount factor
-        "dqn_type":"neurips",
+        "dqn_type": "neurips",
         # total number of steps to run the environment for
         "num-steps": int(1e6),
         "batch-size": 32,  # number of transitions to optimize at the same time
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     random.seed(hyper_params["seed"])
 
     assert "NoFrameskip" in hyper_params["env"], "Require environment with no frameskip"
-    env = gym.make(hyper_params["env"])
+    env = gym.make(hyper_params["env"], render_mode="rgb_array")
     env.seed(hyper_params["seed"])
 
     env = NoopResetEnv(env, noop_max=30)
@@ -76,30 +76,29 @@ if __name__ == '__main__':
         dqn_type=hyper_params["dqn_type"]
     )
 
-    if(args.load_checkpoint_file):
-        print(f"Loading a policy - { args.load_checkpoint_file } ")
-        agent.policy_network.load_state_dict(
-            torch.load(args.load_checkpoint_file))
+    if (args.load_checkpoint_file):
+        print(f"Loading a policy - {args.load_checkpoint_file} ")
+        agent.policy_network.load_state_dict(torch.load(args.load_checkpoint_file, map_location=torch.device('cpu')))
 
     eps_timesteps = hyper_params["eps-fraction"] * \
-        float(hyper_params["num-steps"])
+                    float(hyper_params["num-steps"])
     episode_rewards = [0.0]
 
-    state,info = env.reset()
+    state = env.reset()
     for t in range(hyper_params["num-steps"]):
         fraction = min(1.0, float(t) / eps_timesteps)
         eps_threshold = hyper_params["eps-start"] + fraction * \
-            (hyper_params["eps-end"] - hyper_params["eps-start"])
+                        (hyper_params["eps-end"] - hyper_params["eps-start"])
         sample = random.random()
 
-        if(sample > eps_threshold):
+        if (sample > eps_threshold):
             # Exploit
             action = agent.act(state)
         else:
             # Explore
             action = env.action_space.sample()
 
-        next_state, reward, done, info = env.step(action)
+        next_state, reward, done, truncated, info = env.step(action)
         agent.memory.add(state, action, reward, next_state, float(done))
         state = next_state
 
@@ -117,7 +116,7 @@ if __name__ == '__main__':
         num_episodes = len(episode_rewards)
 
         if done and hyper_params["print-freq"] is not None and len(episode_rewards) % hyper_params[
-                "print-freq"] == 0:
+            "print-freq"] == 0:
             mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
             print("********************************************************")
             print("steps: {}".format(t))

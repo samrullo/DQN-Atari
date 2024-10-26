@@ -76,6 +76,15 @@ class DQNAgent:
                 max_next_q_values, _ = next_q_values.max(1)
             target_q_values = rewards + (1 - dones) * self.gamma * max_next_q_values
 
+        # passing states (batch_size,C,H,W) through policy_network returns (B,A) i.e. state value for each action
+        # but we are interested in state values corresponding to chosen actions
+        # so we want to pick particular value from each row of (B,A) where A = number of actions
+        # gather method achieves that. You tell gather method along which dimension you want to pick values
+        # in our case we want to pick values along 1st dimension of input_q_values tensor
+        # second argument to gather method is the indices to pick up, its shape must match the shape of input_q_values
+        # for instance input_q_values[0,:] will have 6 values to choose from. method gather will pick up the value based
+        # on actions.unsqueeze(1)[0] which will yield a particular action index from 0 to 5
+        # actions.unsqueeze(1) will convert tensor from (batch_size,) to (batch_size,1)
         input_q_values = self.policy_network(states)
         input_q_values = input_q_values.gather(1, actions.unsqueeze(1)).squeeze()
 
