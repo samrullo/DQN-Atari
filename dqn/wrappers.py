@@ -28,14 +28,15 @@ class NoopResetEnv(gym.Wrapper):
         if self.override_num_noops is not None:
             noops = self.override_num_noops
         else:
-            noops = self.unwrapped.np_random.randint(1, self.noop_max + 1)  # pylint: disable=E1101
+            noops = self.unwrapped.np_random.integers(1, self.noop_max + 1)  # pylint: disable=E1101
         assert noops > 0
         obs = None
         for _ in range(noops):
-            obs, _, done, _ = self.env.step(self.noop_action)
+            obs, reward, done, truncated, info = self.env.step(self.noop_action)
+            done = done or truncated
             if done:
-                obs = self.env.reset(**kwargs)
-        return obs
+                obs, info = self.env.reset(**kwargs)
+        return obs,info
 
     def step(self, ac):
         return self.env.step(ac)
@@ -50,10 +51,12 @@ class FireResetEnv(gym.Wrapper):
 
     def reset(self, **kwargs):
         self.env.reset(**kwargs)
-        obs, _, done, _ = self.env.step(1)
+        obs, _, done, truncated, _ = self.env.step(1)
+        done = done or truncated
         if done:
             self.env.reset(**kwargs)
-        obs, _, done, _ = self.env.step(2)
+        obs, _, done, truncated, _ = self.env.step(2)
+        done = done or truncated
         if done:
             self.env.reset(**kwargs)
         return obs
@@ -72,11 +75,13 @@ class EpisodicLifeEnv(gym.Wrapper):
         self.was_real_done = True
 
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
+        obs, reward, done, truncated, info = self.env.step(action)
+        done = done or truncated
         self.was_real_done = done
         # check current lives, make loss of life terminal,
         # then update lives to handle bonus lives
-        lives = self.env.unwrapped.ale.lives()
+        # lives = self.env.unwrapped.ale.lives()
+        lives = info.get('lives', None)
         if lives < self.lives and lives > 0:
             # for Qbert sometimes we stay in lives == 0 condtion for a few frames
             # so its important to keep lives > 0, so that we only reset once
@@ -91,10 +96,10 @@ class EpisodicLifeEnv(gym.Wrapper):
         and the learner need not know about any of this behind-the-scenes.
         """
         if self.was_real_done:
-            obs = self.env.reset(**kwargs)
+            obs, info = self.env.reset(**kwargs)
         else:
             # no-op step to advance from terminal/lost life state
-            obs, _, _, _ = self.env.step(0)
+            obs, _, _, _, _ = self.env.step(0)
         self.lives = self.env.unwrapped.ale.lives()
         return obs
 
@@ -115,7 +120,8 @@ class MaxAndSkipEnv(gym.Wrapper):
         total_reward = 0.0
         done = None
         for i in range(self._skip):
-            obs, reward, done, info = self.env.step(action)
+            obs, reward, done, truncated, info = self.env.step(action)
+            done = done or truncated
             if i == self._skip - 2: self._obs_buffer[0] = obs
             if i == self._skip - 1: self._obs_buffer[1] = obs
             total_reward += reward
@@ -170,13 +176,14 @@ class FrameStack(gym.Wrapper):
         self.observation_space = spaces.Box(low=0, high=255, shape=(shp[0] * k, shp[1], shp[2]), dtype=np.uint8)
 
     def reset(self):
-        ob = self.env.reset()
+        ob, info = self.env.reset()
         for _ in range(self.k):
             self.frames.append(ob)
         return self._get_ob()
 
     def step(self, action):
-        ob, reward, done, info = self.env.step(action)
+        ob, reward, done, truncated, info = self.env.step(action)
+        done = done or truncated
         self.frames.append(ob)
         return self._get_ob(), reward, done, info
 
@@ -221,7 +228,8 @@ class PyTorchFrame(gym.ObservationWrapper):
     def __init__(self, env):
         super(PyTorchFrame, self).__init__(env)
         shape = self.observation_space.shape
-        self.observation_space = gym.spaces.Box(low=0.0, high=1.0, shape=(shape[-1], shape[0], shape[1]), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(low=0.0, high=1.0, shape=(shape[-1], shape[0], shape[1]),
+                                                dtype=np.uint8)
 
     def observation(self, observation):
         return np.rollaxis(observation, 2)

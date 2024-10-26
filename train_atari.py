@@ -57,8 +57,10 @@ if __name__ == '__main__':
     env = PyTorchFrame(env)
     env = ClipRewardEnv(env)
     env = FrameStack(env, 4)
-    env = gym.wrappers.Monitor(
-        env, './video/', video_callable=lambda episode_id: episode_id % 50 == 0, force=True)
+    # env = gym.wrappers.Monitor(env, './video/', video_callable=lambda episode_id: episode_id % 50 == 0, force=True)
+    env = gym.wrappers.RecordVideo(
+        env, video_folder='./video/', episode_trigger=lambda episode_id: episode_id % 50 == 0
+    )
 
     replay_buffer = ReplayBuffer(hyper_params["replay-buffer-size"])
 
@@ -83,7 +85,7 @@ if __name__ == '__main__':
         float(hyper_params["num-steps"])
     episode_rewards = [0.0]
 
-    state = env.reset()
+    state,info = env.reset()
     for t in range(hyper_params["num-steps"]):
         fraction = min(1.0, float(t) / eps_timesteps)
         eps_threshold = hyper_params["eps-start"] + fraction * \
