@@ -128,8 +128,8 @@ class MaxAndSkipEnv(gym.Wrapper):
             total_reward += reward
             if done:
                 break
-        # Note that the observation on the done=True frame
-        # doesn't matter
+        # Note that the observation on the done=True frame doesn't matter
+        # we choose significant pixels over last two frames and treat that as an observation
         max_frame = self._obs_buffer.max(axis=0)
         return max_frame, total_reward, done, truncated, info
 
@@ -229,4 +229,5 @@ class PyTorchFrame(gym.ObservationWrapper):
                                                 dtype=np.uint8)
 
     def observation(self, observation):
+        # np.rollaxis(array, axis, start=0) rolls specified axis to a start position which is zero by default
         return np.rollaxis(observation, 2)

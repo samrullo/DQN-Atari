@@ -49,14 +49,17 @@ if __name__ == '__main__':
     env = gym.make(hyper_params["env"], render_mode="rgb_array")
     env.seed(hyper_params["seed"])
 
-    env = NoopResetEnv(env, noop_max=30)
-    env = MaxAndSkipEnv(env, skip=4)
-    env = EpisodicLifeEnv(env)
-    env = FireResetEnv(env)
-    env = WarpFrame(env)
-    env = PyTorchFrame(env)
-    env = ClipRewardEnv(env)
-    env = FrameStack(env, 4)
+    env = NoopResetEnv(env, noop_max=30) # takes max of noop_max steps on reset
+    env = MaxAndSkipEnv(env, skip=4) # repeats the same action skip times and returns observations, rewards
+    env = EpisodicLifeEnv(env) # make loss of life as treated as if an episode were done and do value estimation
+    env = FireResetEnv(env) # fire on every reset to start the game
+
+    # WarpFrame and PyTorchFrame are ObservationWrappers
+    env = WarpFrame(env) # resize the frame to have 84x84x1 shape it converts frames from RGB to grayscale. Also it changes observation space to expect grayscale inputs
+    env = PyTorchFrame(env) # make the observation to have CxHxW shape by using np.rollaxis(obs, 2, start=0)
+
+    env = ClipRewardEnv(env) # convert reward to one of +1, 0 or -1. this is a RewardWrapper
+    env = FrameStack(env, 4) # stacks 4 frames and treats that as observation. It leverages LazyFrame to save memory
     # env = gym.wrappers.Monitor(env, './video/', video_callable=lambda episode_id: episode_id % 50 == 0, force=True)
     env = gym.wrappers.RecordVideo(
         env, video_folder='./video/', episode_trigger=lambda episode_id: episode_id % 50 == 0
